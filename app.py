@@ -29,7 +29,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://cres-st.netlify.app"
+        "https://crest-st.netlify.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -325,7 +325,7 @@ def generate_receipt(order_id: str):
     elements.append(Spacer(1, 20))
 
     # QR verification URL (Render backend)
-    verification_url = f"https://smart-trolley-backend-5x17.onrender.com/verify-invoice/{order_id}?token={token}&ts={timestamp}"
+    verification_url = f"https://smart-trolley-backend-92bd.onrender.com/verify-invoice/{order_id}?token={token}&ts={timestamp}"
 
     qr = qrcode.make(verification_url)
 
