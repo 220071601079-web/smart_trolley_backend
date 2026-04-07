@@ -156,14 +156,23 @@ def view_cart(trolley_code: str):
 
 # ---------------- CHECKOUT ----------------
 from pydantic import BaseModel
+from typing import Optional
 
 class CheckoutData(BaseModel):
-    trolley_code: str
+    trolley_code: Optional[str] = None
 
 @app.post("/checkout")
-def checkout(data: CheckoutData):
-    trolley_code = data.trolley_code
+def checkout(
+    trolley_code: Optional[str] = None,  # query param support
+    data: Optional[CheckoutData] = None  # body support
+):
 
+    # ✅ handle both cases
+    if data and data.trolley_code:
+        trolley_code = data.trolley_code
+
+    if not trolley_code:
+        raise HTTPException(status_code=400, detail="trolley_code required")
 
     with engine.begin() as conn:
 
@@ -499,4 +508,4 @@ def verify_submit(order_id: str, actual_weight: float = Form(...)):
         </div>
         """
 
-        
+
