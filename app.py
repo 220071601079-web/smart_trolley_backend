@@ -284,103 +284,110 @@ def receive_esp32_data(data: dict):
 
 @app.get("/generate-receipt")
 def generate_receipt(order_id: str):
+    try:
 
-    timestamp = int(time.time())
-    token = hashlib.sha256(f"{order_id}{SECRET_KEY}{timestamp}".encode()).hexdigest()
-    with engine.connect() as conn:
+        timestamp = int(time.time())
+        token = hashlib.sha256(f"{order_id}{SECRET_KEY}{timestamp}".encode()).hexdigest()
 
-        order = conn.execute(
-            text("SELECT total_amount FROM orders WHERE id = :id"),
-            {"id": order_id}
-        ).fetchone()
+        with engine.connect() as conn:
 
-        if not order:
-            raise HTTPException(status_code=404, detail="Order not found")
+            order = conn.execute(
+                text("SELECT total_amount FROM orders WHERE id = :id"),
+                {"id": order_id}
+            ).fetchone()
 
-        items = conn.execute(
-            text("""
-                SELECT p.name, oi.quantity, oi.price,
-                       (oi.quantity * oi.price) AS subtotal
-                FROM order_items oi
-                JOIN products p ON oi.product_id = p.id
-                WHERE oi.order_id = :id
-            """),
-            {"id": order_id}
-        ).fetchall()
+            if not order:
+                raise HTTPException(status_code=404, detail="Order not found")
 
-    os.makedirs("receipts", exist_ok=True)
-    filename = f"receipts/receipt_{order_id}.pdf"
+            items = conn.execute(
+                text("""
+                    SELECT p.name, oi.quantity, oi.price,
+                           (oi.quantity * oi.price) AS subtotal
+                    FROM order_items oi
+                    JOIN products p ON oi.product_id = p.id
+                    WHERE oi.order_id = :id
+                """),
+                {"id": order_id}
+            ).fetchall()
 
-    doc = SimpleDocTemplate(filename)
-    elements = []
-    styles = getSampleStyleSheet()
+        os.makedirs("receipts", exist_ok=True)
+        filename = f"receipts/receipt_{order_id}.pdf"
 
-    elements.append(Paragraph("<b>SMART TROLLEY STORE</b>", styles["Title"]))
-    elements.append(Paragraph("Chennai, India", styles["Normal"]))
-    elements.append(Spacer(1, 10))
+        doc = SimpleDocTemplate(filename)
+        elements = []
+        styles = getSampleStyleSheet()
 
-    elements.append(Paragraph(f"Invoice No: {order_id}", styles["Normal"]))
-    elements.append(Paragraph(f"Date: {datetime.now().strftime('%d-%m-%Y %H:%M:%S')}", styles["Normal"]))
-    elements.append(Spacer(1, 10))
+        elements.append(Paragraph("<b>SMART TROLLEY STORE</b>", styles["Title"]))
+        elements.append(Paragraph("Chennai, India", styles["Normal"]))
+        elements.append(Spacer(1, 10))
 
-    data = [["Item", "Qty", "Price", "Total"]]
+        elements.append(Paragraph(f"Invoice No: {order_id}", styles["Normal"]))
+        elements.append(Paragraph(f"Date: {datetime.now().strftime('%d-%m-%Y %H:%M:%S')}", styles["Normal"]))
+        elements.append(Spacer(1, 10))
 
-    for item in items:
-        data.append([
-            item.name,
-            str(item.quantity),
-            f"{item.price}",
-            f"{item.subtotal}"
+        data = [["Item", "Qty", "Price", "Total"]]
+
+        for item in items:
+            data.append([
+                item.name,
+                str(item.quantity),
+                f"{item.price}",
+                f"{item.subtotal}"
+            ])
+
+        data.append(["", "", "Grand Total", f"{order.total_amount}"])
+
+        table = Table(data, colWidths=[150, 40, 60, 60])
+        table.setStyle([
+            ("GRID", (0,0), (-1,-1), 0.5, colors.black),
+            ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
         ])
 
-    data.append(["", "", "Grand Total", f"{order.total_amount}"])
+        elements.append(table)
+        elements.append(Spacer(1, 20))
 
-    table = Table(data, colWidths=[150, 40, 60, 60])
-    table.setStyle([
-        ("GRID", (0,0), (-1,-1), 0.5, colors.black),
-        ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
-    ])
+        # QR generation (SAFE VERSION)
+        verification_url = f"https://smart-trolley-backend-92bd.onrender.com/verify-invoice/{order_id}?token={token}&ts={timestamp}"
 
-    elements.append(table)
-    elements.append(Spacer(1, 20))
+        from io import BytesIO
+        qr = qrcode.make(verification_url)
 
-    # QR verification URL (Render backend)
-    verification_url = f"https://smart-trolley-backend-92bd.onrender.com/verify-invoice/{order_id}?token={token}&ts={timestamp}"
+        qr_buffer = BytesIO()
+        qr.save(qr_buffer)
+        qr_buffer.seek(0)
 
-    qr = qrcode.make(verification_url)
+        elements.append(Paragraph("Scan QR for Payment Verification", styles["Normal"]))
+        elements.append(Spacer(1, 10))
+        elements.append(Image(qr_buffer, width=120, height=120))
+        elements.append(Spacer(1, 10))
 
-    qr_path = f"receipts/qr_{order_id}.png"
-    qr.save(qr_path)
+        elements.append(Paragraph("Thank you for shopping!", styles["Normal"]))
 
-    elements.append(Paragraph("Scan QR for Payment Verification", styles["Normal"]))
-    elements.append(Spacer(1, 10))
-    elements.append(Image(qr_path, width=120, height=120))
-    elements.append(Spacer(1, 10))
+        doc.build(elements)
 
-    elements.append(Paragraph("Thank you for shopping!", styles["Normal"]))
-
-    doc.build(elements)
-
-    # ---------------- Upload to Supabase Storage ----------------
-
-    with open(filename, "rb") as f:
-        supabase.storage.from_("receipts").upload(
+        # Upload to Supabase
+        with open(filename, "rb") as f:
+            supabase.storage.from_("receipts").upload(
                 f"receipt_{order_id}.pdf",
                 f,
                 {"content-type": "application/pdf", "upsert": True}
             )
 
-    # Get public URL
-    receipt_url = supabase.storage.from_("receipts").get_public_url(
-        f"receipt_{order_id}.pdf"
-    )
+        receipt_url = supabase.storage.from_("receipts").get_public_url(
+            f"receipt_{order_id}.pdf"
+        )
 
-    return {
-        "message": "Professional receipt generated",
-        "file_path": filename,
-        "receipt_url": receipt_url
-    }
+        return {
+            "message": "Professional receipt generated",
+            "file_path": filename,
+            "receipt_url": receipt_url
+        }
 
+    except Exception as e:
+        print("ERROR:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+        
 # ---------------- VERIFY PAGE ----------------
 
 
