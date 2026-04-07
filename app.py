@@ -1,24 +1,24 @@
-from supabase import create_client
 import os
+import hashlib
+import time
+from io import BytesIO
+from datetime import datetime
 
-supabase = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_KEY")
-)
-from fastapi import FastAPI, HTTPException, Form
+from fastapi import FastAPI, HTTPException, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from fastapi import Query
+from pydantic import BaseModel
 from sqlalchemy import text
-from database import engine
-from payment import create_order
-from datetime import datetime
 import qrcode
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Image
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet
-import hashlib
-import time
+from supabase import create_client
+
+from database import engine
+from payment import create_order
+
+supabase = create_client(os.getenv("SUPABASE_URL"), os.getenv("SUPABASE_KEY"))
 
 
 SECRET_KEY = os.getenv("QR_SECRET_KEY")
@@ -155,8 +155,6 @@ def view_cart(trolley_code: str):
 
 
 # ---------------- CHECKOUT ----------------
-from pydantic import BaseModel
-
 class CheckoutData(BaseModel):
     trolley_code: str
 
@@ -225,8 +223,6 @@ def checkout(data: CheckoutData):
 
 # ---------------- PAYMENT SUCCESS ----------------
 
-from pydantic import BaseModel
-
 class PaymentData(BaseModel):
     order_id: str
 
@@ -274,6 +270,7 @@ def receive_esp32_data(data: dict):
 
 @app.get("/generate-receipt")
 def generate_receipt(order_id: str):
+    print(f"Generating receipt for order: {order_id}")
     try:
 
         timestamp = int(time.time())
@@ -300,8 +297,8 @@ def generate_receipt(order_id: str):
                 {"id": order_id}
             ).fetchall()
 
-        os.makedirs("receipts", exist_ok=True)
-        filename = f"receipts/receipt_{order_id}.pdf"
+        os.makedirs("/tmp/receipts", exist_ok=True)
+        filename = f"/tmp/receipts/receipt_{order_id}.pdf"
 
         doc = SimpleDocTemplate(filename)
         elements = []
@@ -360,7 +357,7 @@ def generate_receipt(order_id: str):
             supabase.storage.from_("receipts").upload(
                 f"receipt_{order_id}.pdf",
                 f,
-                {"content-type": "application/pdf", "upsert": True}
+                {"content-type": "application/pdf", "upsert": "true"}
             )
 
         receipt_url = supabase.storage.from_("receipts").get_public_url(

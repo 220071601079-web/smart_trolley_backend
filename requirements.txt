@@ -10,4 +10,4 @@ pillow
 python-multipart
 supabase
 gunicorn
-
+qrcode[pil]
