@@ -22,6 +22,8 @@ import time
 
 
 SECRET_KEY = os.getenv("QR_SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("QR_SECRET_KEY is not set")
 
 app = FastAPI()
 
@@ -218,8 +220,14 @@ def checkout(trolley_code: str):
 
 # ---------------- PAYMENT SUCCESS ----------------
 
+from pydantic import BaseModel
+
+class PaymentData(BaseModel):
+    order_id: str
+
 @app.post("/payment-success")
-def payment_success(order_id: str):
+def payment_success(data: PaymentData):
+    order_id = data.order_id
 
     with engine.begin() as conn:
 
@@ -342,10 +350,10 @@ def generate_receipt(order_id: str):
 
     with open(filename, "rb") as f:
         supabase.storage.from_("receipts").upload(
-            f"receipt_{order_id}.pdf",
-            f,
-            {"content-type": "application/pdf"}
-        )
+                f"receipt_{order_id}.pdf",
+                f,
+                {"content-type": "application/pdf", "upsert": True}
+            )
 
     # Get public URL
     receipt_url = supabase.storage.from_("receipts").get_public_url(
