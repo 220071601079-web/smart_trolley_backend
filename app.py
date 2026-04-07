@@ -28,14 +28,11 @@ app = FastAPI()
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://crest-st.netlify.app"
-    ],
+    allow_origins=["*"],  # ✅ allow all (fixes immediately)
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 @app.get("/")
 def root():
     return {"status": "Smart Trolley Backend Running"}
