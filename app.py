@@ -155,9 +155,15 @@ def view_cart(trolley_code: str):
 
 
 # ---------------- CHECKOUT ----------------
+from pydantic import BaseModel
+
+class CheckoutData(BaseModel):
+    trolley_code: str
 
 @app.post("/checkout")
-def checkout(trolley_code: str):
+def checkout(data: CheckoutData):
+    trolley_code = data.trolley_code
+
 
     with engine.begin() as conn:
 
