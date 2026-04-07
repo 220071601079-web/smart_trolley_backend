@@ -353,17 +353,19 @@ def generate_receipt(order_id: str):
         doc.build(elements)
 
         # Upload to Supabase
+        file_name = f"receipt_{order_id}_{int(time.time())}.pdf"
+
         with open(filename, "rb") as f:
             supabase.storage.from_("receipts").upload(
-                f"receipt_{order_id}.pdf",
+                file_name,
                 f,
-                file_options={"content-type": "application/pdf"},
-                upsert=True
+                {"content-type": "application/pdf"}
             )
 
-        receipt_url = supabase.storage.from_("receipts").get_public_url(
-            f"receipt_{order_id}.pdf"
-        )
+        receipt_url = supabase.storage.from_("receipts").get_public_url(file_name)
+
+        print("Receipt uploaded:", file_name)
+        print("Public URL:", receipt_url)
 
         return {
             "message": "Professional receipt generated",
