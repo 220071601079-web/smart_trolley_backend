@@ -357,7 +357,8 @@ def generate_receipt(order_id: str):
             supabase.storage.from_("receipts").upload(
                 f"receipt_{order_id}.pdf",
                 f,
-                {"content-type": "application/pdf", "upsert": "true"}
+                file_options={"content-type": "application/pdf"},
+                upsert=True
             )
 
         receipt_url = supabase.storage.from_("receipts").get_public_url(
