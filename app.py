@@ -156,23 +156,14 @@ def view_cart(trolley_code: str):
 
 # ---------------- CHECKOUT ----------------
 from pydantic import BaseModel
-from typing import Optional
 
 class CheckoutData(BaseModel):
-    trolley_code: Optional[str] = None
+    trolley_code: str
 
 @app.post("/checkout")
-def checkout(
-    trolley_code: Optional[str] = None,  # query param support
-    data: Optional[CheckoutData] = None  # body support
-):
+def checkout(data: CheckoutData):
 
-    # ✅ handle both cases
-    if data and data.trolley_code:
-        trolley_code = data.trolley_code
-
-    if not trolley_code:
-        raise HTTPException(status_code=400, detail="trolley_code required")
+    trolley_code = data.trolley_code
 
     with engine.begin() as conn:
 
@@ -231,7 +222,6 @@ def checkout(
             "order_id": str(order_id),
             "total_amount": total
         }
-
 
 # ---------------- PAYMENT SUCCESS ----------------
 
@@ -387,7 +377,7 @@ def generate_receipt(order_id: str):
         print("ERROR:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
-        
+
 # ---------------- VERIFY PAGE ----------------
 
 
